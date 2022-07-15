@@ -1,0 +1,98 @@
+image: node:14.17.3
+
+definitions:
+  caches:
+    yarn: ./node_modules
+pipelines:
+  custom:
+    function-deployment:
+      - step: &Deploy
+          name: Deploy to Kubernetes
+          image: docker-registry.cobasi.com.br/kubernetes-deployment-files:latest
+          script:
+            - echo $KUBECONFIG | base64 -d > /root/kubeconfig.yml
+            - env | /root/.bin/prepare-env > /root/.env
+            - /root/.bin/apply-config minha-conta-ui $NAMESPACE
+            - /root/.bin/rollout-restart minha-conta-ui $NAMESPACE
+      - step: &Git-version
+          name: Git version
+          image: mcr.microsoft.com/dotnet/sdk:6.0
+          script:
+            - export PATH="$PATH:/root/.dotnet/tools"
+            - dotnet tool install --global GitVersion.Tool --version 5.*
+            - dotnet-gitversion /output buildserver
+          artifacts:
+            - gitversion.properties
+      - step: &Git-tag
+          name: Git tag
+          script:
+            - source gitversion.properties
+            - npm version $GITVERSION_SEMVER -m "$BITBUCKET_COMMIT [skip ci]"
+            - git push && git push origin --tags
+    deployment-to-prod:
+      - step: &Deploy-step-prod
+          trigger: manual
+          deployment: prod-kubernetes
+          <<: *Deploy
+    deployment-to-qa:
+      - step: &Deploy-step-qa
+          deployment: qa-kubernetes
+          <<: *Deploy
+    deployment-to-dev:
+      - step: &Deploy-step-dev
+          deployment: dev-kubernetes
+          <<: *Deploy
+    git-version: 
+      - step: *Git-version
+      - step: *Git-tag
+  branches:
+    master:
+      - step: *Git-version
+      - step: *Git-tag
+      - step:
+          name: Master deployment
+          deployment: prod
+          caches:
+            - node
+          script:
+            - env >> .env
+            - yarn pre-install
+            - yarn install --production=false
+            - yarn build:prod
+            - docker build -t docker-registry.cobasi.com.br/$BITBUCKET_REPO_SLUG:latest .
+            - docker push docker-registry.cobasi.com.br/$BITBUCKET_REPO_SLUG:latest
+          services:
+            - docker
+      - step: *Deploy-step-prod
+    staging:
+      - step:
+          name: QA deployment
+          deployment: qa
+          caches:
+            - node
+          script:
+            - env >> .env
+            - yarn pre-install
+            - yarn install --production=false
+            - yarn build:prod
+            - docker build -t docker-registry.cobasi.com.br/$BITBUCKET_REPO_SLUG:qa .
+            - docker push docker-registry.cobasi.com.br/$BITBUCKET_REPO_SLUG:qa
+          services:
+            - docker
+      - step: *Deploy-step-qa
+    develop:
+      - step:
+          name: Dev deployment
+          deployment: dev
+          caches:
+            - yarn
+          script:
+            - env >> .env
+            - yarn pre-install
+            - yarn install --production=false
+            - yarn build:prod
+            - docker build -t docker-registry.cobasi.com.br/$BITBUCKET_REPO_SLUG:dev .
+            - docker push docker-registry.cobasi.com.br/$BITBUCKET_REPO_SLUG:dev
+          services:
+            - docker
+      - step: *Deploy-step-dev

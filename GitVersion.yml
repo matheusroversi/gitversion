@@ -1,0 +1,75 @@
+mode: ContinuousDeployment
+next-version: 1.0.0
+increment: Inherit
+assembly-versioning-scheme: MajorMinorPatch
+commit-message-incrementing: Enabled
+major-version-bump-message: "((.|\n)*)(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(!)?(:)((.|\n)*)(BREAKING CHANGE:)((.|\n)*)"
+minor-version-bump-message: "((.|\n)*)(feat)(\\([\\w\\s-]*\\))?:"
+patch-version-bump-message: "((.|\n)*)(chore|fix|perf|refactor|revert)(\\([\\w\\s-]*\\))?:"
+no-bump-message: (^(none|skip|build|ci|docs|style|test)(\(.*\))?:)|(\+semver:\s?(none|skip))
+continuous-delivery-fallback-tag: ''
+branches:
+  main:
+    mode: ContinuousDeployment
+    tag: ''
+    increment: Inherit
+    prevent-increment-of-merged-branch-version: true
+    track-merge-target: false
+    regex: ^master$|^main$
+    source-branches:
+      - release
+      - feature
+    tracks-release-branches: false
+    is-release-branch: false
+    is-mainline: false
+    pre-release-weight: 55000
+  release:
+    mode: ContinuousDeployment
+    tag: rc
+    increment: Patch
+    regex: ^staging
+    source-branches:
+      - develop
+      - feature
+    is-source-branch-for:
+      - main
+      - feature
+      - develop
+    prevent-increment-of-merged-branch-version: true
+    tracks-release-branches: true
+    commit-message-incrementing: Enabled
+  feature:
+    mode: ContinuousDeployment
+    tag: useBranchName
+    increment: Inherit
+    regex: ^((?!main|master|staging|develop).)*$ # matches everything as feature but main, master, and staging.
+    source-branches:
+      - main
+      - release
+    prevent-increment-of-merged-branch-version: true
+    tracks-release-branches: true
+    commit-message-incrementing: Enabled
+  develop:
+    mode: ContinuousDeployment
+    tag: dev
+    increment: Inherit
+    regex: ^develop$
+    source-branches:
+      - main
+      - release
+      - feature
+    prevent-increment-of-merged-branch-version: true
+    tracks-release-branches: true
+    commit-message-incrementing: Enabled
+  pull-request:
+    # Matches nothing
+    regex: ^\b$
+  hotfix:
+    # Matches nothing
+    regex: ^\b$
+  support:
+    # Matches nothing
+    regex: ^\b$
+ignore:
+  sha: []
+merge-message-formats: {}
